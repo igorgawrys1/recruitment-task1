@@ -1,0 +1,112 @@
+stages:
+  - test
+  - build
+  - deploy
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: "/certs"
+
+services:
+  - docker:20.10.16-dind
+
+before_script:
+  - docker info
+
+# Backend Tests
+test:backend:
+  stage: test
+  image: php:8.2-cli
+  services:
+    - mysql:8.0
+  variables:
+    MYSQL_DATABASE: testing
+    MYSQL_USER: testing
+    MYSQL_PASSWORD: testing
+    MYSQL_ROOT_PASSWORD: root
+    DB_HOST: mysql
+    DB_CONNECTION: mysql
+    DB_DATABASE: testing
+    DB_USERNAME: testing
+    DB_PASSWORD: testing
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq git curl libmcrypt-dev libjpeg-dev libpng-dev libfreetype6-dev libbz2-dev libzip-dev
+    - docker-php-ext-install pdo_mysql zip
+    - curl -sS https://getcomposer.org/installer | php
+    - php composer.phar install --no-dev --no-scripts
+    - cp .env.testing .env
+    - php artisan key:generate
+    - php artisan migrate
+  script:
+    - cd backend
+    - php artisan test
+  only:
+    - merge_requests
+    - main
+
+# Frontend Tests
+test:frontend:
+  stage: test
+  image: node:18-alpine
+  before_script:
+    - cd frontend
+    - npm ci
+  script:
+    - npm run type-check
+    - npm run build
+  cache:
+    paths:
+      - frontend/node_modules/
+  only:
+    - merge_requests
+    - main
+
+# Build Docker Images
+build:backend:
+  stage: build
+  image: docker:20.10.16
+  script:
+    - cd backend
+    - docker build -t $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA .
+    - docker push $CI_REGISTRY_IMAGE/backend:$CI_COMMIT_SHA
+  only:
+    - main
+
+build:frontend:
+  stage: build
+  image: docker:20.10.16
+  script:
+    - cd frontend
+    - docker build -t $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA .
+    - docker push $CI_REGISTRY_IMAGE/frontend:$CI_COMMIT_SHA
+  only:
+    - main
+
+# Deploy (example for staging/production)
+deploy:staging:
+  stage: deploy
+  image: docker:20.10.16
+  script:
+    - echo "Deploying to staging environment..."
+    - docker-compose -f docker-compose.staging.yml down
+    - docker-compose -f docker-compose.staging.yml up -d
+  environment:
+    name: staging
+    url: https://staging.patient-portal.example.com
+  only:
+    - main
+  when: manual
+
+deploy:production:
+  stage: deploy
+  image: docker:20.10.16
+  script:
+    - echo "Deploying to production environment..."
+    - docker-compose -f docker-compose.prod.yml down
+    - docker-compose -f docker-compose.prod.yml up -d
+  environment:
+    name: production
+    url: https://patient-portal.example.com
+  only:
+    - tags
+  when: manual

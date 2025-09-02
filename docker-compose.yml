@@ -1,0 +1,82 @@
+
+services:
+  app:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: patient_portal_backend
+    restart: unless-stopped
+    working_dir: /var/www
+    volumes:
+      - ./backend:/var/www
+      - ./backend/storage:/var/www/storage
+    networks:
+      - patient_portal
+    environment:
+      - APP_ENV=local
+      - APP_DEBUG=true
+      - DB_CONNECTION=mysql
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_DATABASE=patient_portal
+      - DB_USERNAME=patient_portal
+      - DB_PASSWORD=secret
+    depends_on:
+      - db
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: patient_portal_frontend
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - patient_portal
+    environment:
+      - VITE_API_URL=http://localhost:8000/api
+    depends_on:
+      - app
+
+  db:
+    image: mysql:8.0
+    container_name: patient_portal_db
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_DATABASE: patient_portal
+      MYSQL_USER: patient_portal
+      MYSQL_PASSWORD: secret
+      MYSQL_ROOT_PASSWORD: root_secret
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - patient_portal
+
+  nginx:
+    image: nginx:alpine
+    container_name: patient_portal_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./backend:/var/www
+      - ./docker/nginx:/etc/nginx/conf.d
+    networks:
+      - patient_portal
+    depends_on:
+      - app
+
+volumes:
+  db_data:
+
+networks:
+  patient_portal:
+    driver: bridge

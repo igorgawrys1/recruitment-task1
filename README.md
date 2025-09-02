@@ -9,7 +9,19 @@
 docker-compose up -d
 ```
 
-### 2. Setup Database
+### 2. Setup Backend Environment
+```bash
+# Copy environment configuration
+docker-compose exec app cp .env.example .env
+
+# Generate application key
+docker-compose exec app php artisan key:generate
+
+# Generate JWT secret
+docker-compose exec app php artisan jwt:secret
+```
+
+### 3. Setup Database
 ```bash
 # Run migrations
 docker-compose exec app php artisan migrate
@@ -18,7 +30,7 @@ docker-compose exec app php artisan migrate
 docker-compose exec app php artisan import:patients results.csv
 ```
 
-### 3. Access the Application
+### 4. Access the Application
 - **Frontend**: http://localhost:5173
 - **Backend API**: http://localhost:8000/api
 
@@ -46,14 +58,26 @@ docker-compose down
 ### Backend
 ```bash
 cd backend
+
+# Install dependencies
 composer install
+
+# Environment setup (IMPORTANT: Copy environment file)
 cp .env.example .env
 php artisan key:generate
 php artisan jwt:secret
+
+# Database setup
 php artisan migrate
+
+# Import sample data
 php artisan import:patients results.csv
+
+# Start development server
 php artisan serve
 ```
+
+**Important**: Make sure to copy `.env.example` to `.env` before running any artisan commands!
 
 ### Frontend
 ```bash
